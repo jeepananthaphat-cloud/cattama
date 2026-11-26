@@ -320,7 +320,7 @@ function hearts(c) {
     setTimeout(() => h.remove(), 1400);
   }, i * 180);
 }
-function walkTo(c, x, y, goal, run) { c.st = run ? 'run' : 'walk'; c.tx = clamp(x, 16, W - 16); c.ty = y; c.goal = goal || null; c.until = performance.now() + 14000; }
+function walkTo(c, x, y, goal, run) { const off = goal && (goal.k === 'home' || goal.k === 'leave'); c.st = run ? 'run' : 'walk'; c.tx = off ? x : clamp(x, 16, W - 16); c.ty = y; c.goal = goal || null; c.until = performance.now() + 14000; }
 function jumpTo(c, x, y, plat) {
   const now = performance.now(), from = c.plat >= 0 ? plats[c.plat].z : 2 * Math.round(c.y), to = plat >= 0 ? plats[plat].z : 2 * Math.round(y);
   c.st = 'jump'; c.dir = x >= c.x ? 1 : -1;
@@ -353,7 +353,7 @@ function arrive(c, now) {
   const g = c.goal; c.goal = null;
   if (c.remote) { c.st = c.after || 'sit'; c.until = Infinity; return; }
   if (g && g.k === 'plat') { const p = plats[g.i]; jumpTo(c, clamp(c.x + rnd(-20, 20) * S, p.x0 + 4 * S, p.x1 - 4 * S), p.y, g.i); return; }
-  if (g && g.k === 'home') { walkTo(c, c.x < W / 2 ? -90 : W + 90, c.y, { k: 'home' }); c.until = now + 30000; return; }
+  if (g && g.k === 'home') { if (c.me && (c.x < 0 || c.x > W)) { gone(); return; } walkTo(c, c.x < W / 2 ? -90 : W + 90, c.y, { k: 'home' }); c.until = now + 30000; return; }
   c.st = 'sit'; c.until = now + rnd(2000, 5000);
 }
 let last = performance.now();
@@ -555,7 +555,8 @@ function connect() {
     console.log('[catpark]', st, err ? (err.message || err) : '');
     const ok = st === 'SUBSCRIBED';
     status.textContent = ok ? 'online' : 'connecting…'; status.className = 'dot ' + (ok ? 'on' : '');
-    if (ok) { live = true; lastKey = ''; if (me && !home) { seq++; track({ ...myAction(), s: seq }); } if (myLook && !lookShared) shareLook(); }
+    if (ok) { live = true; lastKey = ''; if (me && !home) { seq++; track({ ...myAction(), s: seq }); } if (myLook && !lookShared) shareLook();
+      if (me && !myLook && !me.lookTried) { me.lookTried = true; loadLook(myId, me).then(() => { if (me.lookLoaded) { lookShared = true; document.getElementById('mePic').src = SP[me.coat].sit; document.getElementById('meCoat').textContent = 'Your own coat · from your Mac'; lastKey = ''; seq++; track({ ...myAction(), s: seq }); } }); } }
     else { live = false; clearTimeout(retryT); retryT = setTimeout(connect, 3000); }   // dropped: join again
   });
 }
