@@ -493,23 +493,33 @@ const SB_URL = 'https://exzsczussggzufxiktbj.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4enNjenVzc2dnenVmeGlrdGJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU2NzE1MTksImV4cCI6MjExMTI0NzUxOX0.jAaV1cBIfn6-NOdpHcXn8NLj11nmjyz-XdP_bAF8Mxo';
 const status = document.getElementById('status');
 let chan = null, live = false;
-function track(m) { if (chan && live && me && !home) chan.track({ n: myName, c: myCoat, ...m }).catch(() => {}); }
+function track(m) { if (chan && live && me && !home) chan.track({ n: myName, c: myCoat, ...m }).then(r => { if (r !== 'ok') console.log('[catpark] track', r); }).catch(e => console.log('[catpark] track error', e)); }
+let sb = null, retryT = 0;
 function connect() {
   if (!window.supabase) { status.textContent = 'offline'; return; }
-  const sb = window.supabase.createClient(SB_URL, SB_KEY, { realtime: { params: { eventsPerSecond: 8 } } });
-  chan = sb.channel('catpark-main', { config: { presence: { key: myId }, broadcast: { self: false } } });
-  chan.on('presence', { event: 'sync' }, () => syncPresence(chan.presenceState()));
-  chan.on('broadcast', { event: 'chat' }, ({ payload }) => { const c = remotes.get(payload.id); if (c && typeof payload.t === 'string') say(c, clean(payload.t)); });
-  chan.on('broadcast', { event: 'pet' }, ({ payload }) => {
+  if (!sb) sb = window.supabase.createClient(SB_URL, SB_KEY, { realtime: { params: { eventsPerSecond: 8 }, worker: true, heartbeatIntervalMs: 15000 } });
+  if (chan) { try { sb.removeChannel(chan); } catch {} chan = null; }
+  live = false;
+  const c = sb.channel('catpark-main', { config: { presence: { key: myId }, broadcast: { self: false } } });
+  chan = c;
+  c.on('presence', { event: 'sync' }, () => { if (chan === c) syncPresence(c.presenceState()); });
+  c.on('broadcast', { event: 'chat' }, ({ payload }) => { const k = remotes.get(payload.id); if (k && typeof payload.t === 'string') say(k, clean(payload.t)); });
+  c.on('broadcast', { event: 'pet' }, ({ payload }) => {
     if (me && payload.to === myId && !home) { hearts(me); const from = remotes.get(payload.id); sys((from ? from.name : 'Someone') + ' petted ' + me.name + ' ❤️'); }
-    else { const c = remotes.get(payload.to); if (c) hearts(c); }
+    else { const k = remotes.get(payload.to); if (k) hearts(k); }
   });
-  chan.subscribe(st => {
-    status.textContent = st === 'SUBSCRIBED' ? 'online' : st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' ? 'reconnecting…' : 'connecting…';
-    status.className = 'dot ' + (st === 'SUBSCRIBED' ? 'on' : '');
-    if (st === 'SUBSCRIBED') { live = true; lastKey = ''; if (me) report(performance.now() + 1000); }
+  c.subscribe((st, err) => {
+    if (chan !== c) return;
+    console.log('[catpark]', st, err ? (err.message || err) : '');
+    const ok = st === 'SUBSCRIBED';
+    status.textContent = ok ? 'online' : 'connecting…'; status.className = 'dot ' + (ok ? 'on' : '');
+    if (ok) { live = true; lastKey = ''; if (me && !home) { seq++; track({ ...myAction(), s: seq }); } }
+    else { live = false; clearTimeout(retryT); retryT = setTimeout(connect, 3000); }   // dropped: join again
   });
 }
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !live) connect(); });
+setInterval(() => { if (!live && !document.hidden) connect(); }, 15000);
+window.__park = () => ({ live, state: chan && chan.state, players: remotes.size });
 
 // ---------- chat: short, slowed down, rude words hidden ----------
 const BAD = ['fuck', 'shit', 'bitch', 'cunt', 'dick', 'pussy', 'nigg', 'fag', 'slut', 'whore', 'ควย', 'เหี้ย', 'สัส', 'เย็ด', 'แตด', 'ดอกทอง', 'ระยำ', 'ชาติหมา', 'อีดอก', 'ไอ้สัตว์', 'อีสัตว์'];
