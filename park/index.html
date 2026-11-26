@@ -545,6 +545,7 @@ function connect() {
   chan = c;
   c.on('presence', { event: 'sync' }, () => { if (chan === c) syncPresence(c.presenceState()); });
   c.on('broadcast', { event: 'chat' }, ({ payload }) => { const k = remotes.get(payload.id); if (k && typeof payload.t === 'string') say(k, clean(payload.t)); });
+  c.on('broadcast', { event: 'home' }, ({ payload }) => { if (me && payload && payload.id === myId && !home) { sys(me.name + ' was called home'); walkHome(); } });
   c.on('broadcast', { event: 'pet' }, ({ payload }) => {
     if (me && payload.to === myId && !home) { hearts(me); const from = remotes.get(payload.id); sys((from ? from.name : 'Someone') + ' petted ' + me.name + ' ❤️'); }
     else { const k = remotes.get(payload.to); if (k) hearts(k); }
@@ -592,16 +593,21 @@ function gone() {
   cats.splice(cats.indexOf(me), 1); count(); sys(me.name + ' went home to the Mac');
   if (chan && live) chan.untrack().catch(() => {});
   meState.textContent = 'Back home on your Mac'; homeBtn.style.display = 'none';
-  try { location.href = 'cattama://home?id=' + encodeURIComponent(myId); } catch {}           // tells the CatTama app the cat is back
 }
+let walkHome = () => {};
 if (fromApp) {
   homeBtn.addEventListener('click', () => {
+    if (home) return;
+    try { location.href = 'cattama://home?id=' + encodeURIComponent(myId); } catch {}   // tell the CatTama app right away (it has to happen during the click)
+    walkHome();
+  });
+  walkHome = function () {
     if (home) return;
     home = true; homeBtn.disabled = true; meState.textContent = 'Walking home…';
     if (me.plat >= 0) { const p = plats[me.plat], [x, y] = groundNear(me.x, p.gy); jumpTo(me, x, y, -1); me.goal = { k: 'home' }; }
     else if (me.st === 'jump') me.goal = { k: 'home' };
     else { walkTo(me, me.x < W / 2 ? -90 : W + 90, me.y, { k: 'home' }); me.until = performance.now() + 30000; }
-  });
+  };
   document.getElementById('sitBtn').addEventListener('click', () => { if (home || me.st === 'jump') return; me.goal = null; me.st = 'sit'; me.until = performance.now() + 8000; });
   document.getElementById('napBtn').addEventListener('click', () => { if (home || me.st === 'jump') return; me.goal = null; me.st = 'loaf'; me.until = performance.now() + 15000; });
   park.addEventListener('click', e => {
