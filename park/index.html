@@ -497,7 +497,7 @@ function syncPresence(state) {
       c.placed = false; applyRemote(c, m, true);
       c.x = m.p >= 0 ? c.x : (Math.random() < 0.5 ? -40 : W + 40); if (c.plat < 0) { const [x, y] = dec(m); walkTo(c, x, y); c.after = m.a === 'loaf' ? 'loaf' : 'sit'; }
     } else applyRemote(c, m, false);
-    if (m.l && !c.lookTried) { c.lookTried = true; loadLook(key, c); }
+    if (!c.lookTried || (m.l && !c.lookLoaded && !c.lookBusy)) { c.lookTried = true; loadLook(key, c); }   // every cat's own coat, hat and collar
   }
   for (const [key, c] of remotes) if (!seen.has(key)) {           // left the park: walk off and go
     remotes.delete(key); sys(c.name + ' went home');
@@ -531,8 +531,10 @@ async function shareLook() {
     if (!error) { lookShared = true; lastKey = ''; seq++; if (me && !home) track({ ...myAction(), s: seq }); } else console.log('[catpark] look', error.message); } catch (e) { console.log('[catpark] look', e); }
 }
 async function loadLook(key, c) {
+  c.lookBusy = true;
   try { const { data } = await sb.from('cat_looks').select('sheet').eq('id', key).maybeSingle();
-    if (data && data.sheet) { SP['u:' + key] = await cutSheet(data.sheet); c.coat = 'u:' + key; } } catch (e) { console.log('[catpark] load look', e); }
+    if (data && data.sheet) { SP['u:' + key] = await cutSheet(data.sheet); c.coat = 'u:' + key; c.lookLoaded = true; } } catch (e) { console.log('[catpark] load look', e); }
+  c.lookBusy = false;
 }
 function connect() {
   if (!window.supabase) { status.textContent = 'offline'; return; }
