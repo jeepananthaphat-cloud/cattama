@@ -51,7 +51,7 @@ aside{display:flex;flex-direction:column;gap:14px}
 .panel{background:var(--paper);border:3px solid var(--line);padding:12px}
 .panel h2{font-size:16px;margin:0 0 8px}
 .name{width:100%;font:inherit;font-size:16px;padding:8px 10px;border:3px solid var(--line);background:var(--bg);color:var(--ink);min-height:44px}
-.me-card{display:flex;gap:12px;align-items:center}.me-pic{width:96px;height:96px;flex:none;background:var(--bg);border:3px solid var(--line);display:flex;align-items:flex-end;justify-content:center;overflow:hidden}.me-pic img{width:108px;height:108px;image-rendering:pixelated;margin-bottom:-6px}
+.me-card{display:flex;gap:12px;align-items:center}.me-pic{width:96px;height:96px;flex:none;background:var(--bg);border:3px solid var(--line);display:flex;align-items:flex-end;justify-content:center;overflow:hidden}.me-pic img{width:108px;height:auto;image-rendering:pixelated;margin-bottom:-6px}
 .me-name{font-family:Silkscreen,TA8,monospace;font-size:20px;line-height:1.1}.me-info{color:var(--soft);font-size:18px}
 .me-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .coats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px}
@@ -294,7 +294,12 @@ const SHADOW = (() => { const cv = document.createElement('canvas'), w = 26, h =
     if (r <= 1) { const o = (j * w + i) * 4; d.data[o] = 40; d.data[o + 1] = 60; d.data[o + 2] = 30; d.data[o + 3] = r < 0.45 ? 70 : 45; } }
   x.putImageData(d, 0, 0); return cv.toDataURL(); })();
 function count() { const n = cats.filter(c => !c.npc).length; document.getElementById('count').textContent = n; }
-function setPose(c, key) { if (c.img.dataset.k !== key + c.coat) { c.img.src = SP[c.coat][key]; c.img.dataset.k = key + c.coat; } }
+function setPose(c, key) {
+  const set = SP[c.coat], pad = set.pad || 0;
+  if (c.img.dataset.k !== key + c.coat) { c.img.src = set[key]; c.img.dataset.k = key + c.coat; }
+  const h = (60 + pad) * CS + 'px';                               // taller pictures (with a hat) reach up above the cat's box
+  if (c.img.style.height !== h) { c.img.style.height = h; c.img.style.marginTop = (-pad * CS) + 'px'; }
+}
 function say(c, text) {
   text = String(text).trim().slice(0, 60); if (!text) return;
   if (muted.has(c.pid)) return;
@@ -414,9 +419,10 @@ function cutSheet(url) {
   return new Promise((ok, bad) => {
     const im = new Image();
     im.onload = () => {
-      if (im.width !== 60 * FRAMES.length || im.height !== 60) return bad('size');
-      const out = {}, cv = document.createElement('canvas'); cv.width = 60; cv.height = 60; const x = cv.getContext('2d');
-      FRAMES.forEach((k, i) => { x.clearRect(0, 0, 60, 60); x.drawImage(im, -i * 60, 0); out[k] = cv.toDataURL(); });
+      const pad = im.height - 60;                                 // room above the head for a hat
+      if (im.width !== 60 * FRAMES.length || pad < 0 || pad > 40) return bad('size');
+      const out = { pad }, cv = document.createElement('canvas'); cv.width = 60; cv.height = im.height; const x = cv.getContext('2d');
+      FRAMES.forEach((k, i) => { x.clearRect(0, 0, 60, im.height); x.drawImage(im, -i * 60, 0); out[k] = cv.toDataURL(); });
       ok(out);
     };
     im.onerror = bad; im.src = url;
@@ -432,7 +438,7 @@ if (fromApp) {
   document.getElementById('mePic').src = SP[myCoat].sit;
   if (lookHash) cutSheet('data:image/png;base64,' + decodeURIComponent(lookHash)).then(fr => {
     myLook = 'data:image/png;base64,' + decodeURIComponent(lookHash);
-    SP['u:' + myId] = fr; me.coat = 'u:' + myId; document.getElementById('mePic').src = fr.sit; shareLook();
+    SP['u:' + myId] = fr; me.coat = 'u:' + myId; document.getElementById('mePic').src = fr.sit; document.getElementById('meCoat').textContent = 'Your own coat · from your Mac'; shareLook();
   }).catch(() => {});
   document.getElementById('meName').textContent = myName;
   document.getElementById('meCoat').textContent = ['Tabby', 'Orange', 'Gray', 'Black', 'Tuxedo', 'White', 'Calico', 'Siamese'][myCoat] + ' · from your Mac';
