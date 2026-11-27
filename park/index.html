@@ -26,6 +26,7 @@ h1{font-family:Silkscreen,TA8,monospace;font-weight:700;font-size:clamp(28px,4vw
 .grid{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:14px}
 @media(max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
 .park{position:relative;height:clamp(340px,58vh,560px);border:4px solid var(--line);overflow:hidden;background:#8fd0f0;image-rendering:pixelated;user-select:none;-webkit-user-select:none}
+.park canvas.snow{position:absolute;left:0;top:0;pointer-events:none;z-index:99999;image-rendering:pixelated}
 .park canvas.bg,.park canvas.prop{position:absolute;left:0;top:0;image-rendering:pixelated;pointer-events:none}
 .cat{position:absolute;left:0;top:0;cursor:pointer;will-change:transform}
 .cat img.body{display:block;image-rendering:pixelated;width:100%;height:100%}
@@ -149,8 +150,186 @@ function paint(cv, g, colour, flat = []) {
 }
 const FLOWERS = ['#ff8fb1', '#ffd84d', '#ffffff', '#b48cff', '#ff9f43', '#ff6b6b'].map(hex);
 
+// ---------- winter festival (15 Nov – 10 Jan): snow, a giant Christmas tree, a gingerbread house ----------
+const FEST = (() => { const q = new URLSearchParams(location.search).get('xmas'); if (q === '1') return true; if (q === '0') return false;
+  const d = new Date(), m = d.getMonth() + 1, day = d.getDate(); return m === 12 || (m === 11 && day >= 15) || (m === 1 && day <= 10); })();
+if (FEST) { document.querySelector('.sub').textContent = '❄ Winter Festival — snow, a giant Christmas tree and a gingerbread house'; park.style.background = '#3a4a8a'; }
+const LIGHTS = ['#ff5a5a', '#ffd84d', '#6fe0ff', '#ff8fd0', '#8dff7a', '#ffa64d'].map(hex);
+const SNOWC = hex('#f4f8ff');
+function drawWinterBG() {
+  const aw = Math.ceil(W / S), ah = Math.ceil(H / S);
+  const g = grid(aw, ah), gy = Math.round(ah * 0.44);
+  const MOON = 1, HILL1 = 2, PINE = 3, PINE_S = 4, HILL2 = 5, HEDGE = 6, SNOW = 7, PATH = 8, MOUND = 9, CAP = 10;
+  g.oval(aw * 0.86, ah * 0.13, 8, MOON);
+  const h1 = x => gy - 18 - 7 * Math.sin(x / 41) - 4 * Math.sin(x / 15 + 1), h2 = x => gy - 8 - 4 * Math.sin(x / 27 + 2) - 2 * Math.sin(x / 9);
+  for (let x = 0; x < aw; x++) for (let y = Math.round(h1(x)); y < gy; y++) g.put(x, y, HILL1);
+  for (let x = 3; x < aw; x += 8 + hash(x, 11) % 8) {                                                   // a snowy pine forest on the far hills
+    const ph = 9 + hash(x, 13) % 9, base = Math.round(h1(x)) + 3;
+    for (let j = 0; j < ph; j++) { const half = Math.floor(j * 0.42); for (let i = -half; i <= half; i++) g.put(x + i, base - ph + j, (j < 2 || (j % 4 === 3 && Math.abs(i) >= half - 1)) ? PINE_S : PINE); }
+  }
+  for (let x = 0; x < aw; x++) {
+    for (let y = Math.round(h2(x)); y < gy; y++) g.put(x, y, HILL2);
+    for (let y = gy; y < ah; y++) g.put(x, y, SNOW);
+  }
+  for (let x = -6; x < aw + 8; x += 11) g.oval(x + (hash(x, 7) % 5), gy + 1, 8 + hash(x, 3) % 3, HEDGE, 6 + hash(x, 5) % 3);   // evergreen hedge…
+  for (let x = 0; x < aw; x++) { let t = -1; for (let y = gy - 12; y < gy + 8; y++) if (g.L[y * aw + x] === HEDGE) { t = y; break; }
+    if (t >= 0) for (let y = t; y < t + 2 + hash(x, 9) % 2; y++) if (g.L[y * aw + x] === HEDGE) g.put(x, y, CAP); }           // …with snow on top
+  for (let y = gy + 4; y < ah; y++) {                                                                                       // a trodden path through the snow
+    const cx = aw * 0.5 + Math.sin(y / 19) * aw * 0.06, hw = 3 + (y - gy) * 0.16;
+    for (let x = Math.round(cx - hw); x <= cx + hw; x++) g.put(x, y, PATH);
+  }
+  for (const [fx, fy, r] of [[0.08, 0.6, 16], [0.3, 0.55, 12], [0.7, 0.57, 13], [0.93, 0.62, 15], [0.22, 0.95, 14], [0.8, 0.98, 16]])   // snow drifts
+    g.oval(aw * fx, ah * fy, r, MOUND, r * 0.45);
+  const SKY = ['#2c3b7a', '#34458a', '#3f5297', '#4d60a5', '#6470b3', '#8484c2', '#a99dd0', '#cbb8dd'].map(hex);
+  const BASE = { [MOON]: '#fff4cf', [HILL1]: '#c3d1ec', [PINE]: '#2d6a52', [PINE_S]: '#e9f0fb', [HILL2]: '#dbe5f5', [HEDGE]: '#2c6844', [SNOW]: '#f2f6fd', [PATH]: '#c6d1e6', [MOUND]: '#e7eefa', [CAP]: '#f8fbff' };
+  for (const k in BASE) BASE[k] = hex(BASE[k]);
+  paint(bgc, g, (k, x, y) => {
+    if (k === 0) { const t = Math.min(0.999, y / gy) * SKY.length, b = Math.floor(t), f = t - b; let c = SKY[(f > 0.75 && (x + y) % 2 === 0) ? Math.min(SKY.length - 1, b + 1) : b];
+      const st = hash(x, y * 3); if (y < gy * 0.62 && st % 211 === 0) c = (st >> 9) % 3 ? hex('#ffffff') : hex('#fff2a8');   // stars
+      return c; }
+    let c = BASE[k]; const h = hash(x, y);
+    if (k === MOON) { if (hash(x >> 1, y >> 1) % 7 === 0) c = hex('#efe1b4'); }
+    else if (k === SNOW || k === MOUND) {
+      if (h % 37 === 0) c = hex('#dde6f5'); else if (h % 53 === 0) c = WHITE;
+      if (hash(x >> 1, y) % 151 === 0) c = hex('#cdd9ee');                                                  // blue shadows in the snow
+      if (h % 613 === 0) c = hex('#fff6c8');                                                                 // a glint
+    } else if (k === HEDGE) {
+      const f = hash(x >> 1, y >> 1);
+      if (f % 7 === 0) c = LIGHTS[(f >> 3) % LIGHTS.length];                                                 // fairy lights
+      else if (h % 9 === 0) c = mix(c, WHITE, 0.25);
+    } else if (k === PATH) { if (h % 13 === 0) c = hex('#b2bed6'); else if (h % 29 === 0) c = hex('#dbe3f1'); }
+    else if (k === HILL2 || k === HILL1) { if (h % 41 === 0) c = mix(c, WHITE, 0.5); }
+    return c;
+  }, [CAP, PINE_S]);
+  buildProps(aw, ah);
+}
+
+// the giant Christmas tree: five snowy tiers to climb, baubles, lights and a star on top
+function xmasTreeArt(th) {
+  const k = th / 160, tw = Math.round(th * 0.8), g = grid(tw, th), cx = tw / 2;
+  const TRUNK = 1, NEED_D = 2, NEED = 3, NEED_L = 4, SNOW = 5, LIGHT = 6, BR = 7, BG = 8, BB = 9, BP = 10, STAR = 11, STAR_L = 12;
+  g.box(cx - 6 * k, th - 16 * k, 12 * k, 16 * k, TRUNK);
+  const n = 5, top = 16 * k, bot = th - 13 * k, tierH = (bot - top) / (n * 0.78 + 0.22), brs = [];
+  for (let i = 0; i < n; i++) {
+    const y0 = top + i * tierH * 0.78, y1 = y0 + tierH, hb = tw * (0.17 + 0.078 * i);
+    for (let y = Math.floor(y0); y <= y1; y++) {
+      const half = 2 * k + (y - y0) / (y1 - y0) * (hb - 2 * k);
+      for (let x = Math.floor(cx - half); x <= cx + half; x++) {
+        if (y > y1 - 3 * k && hash(x >> 1, i) % 3 === 0 && Math.abs(x - cx) > half * 0.2) continue;   // a ragged needle hem
+        const r = (x - cx) / Math.max(1, half);
+        g.put(x, y, r > 0.35 ? NEED_D : (r < -0.45 && y < y0 + (y1 - y0) * 0.8) ? NEED_L : NEED);
+      }
+    }
+    for (let x = Math.floor(cx - hb); x <= cx + hb; x++) {                                    // snow resting on the slope of each tier
+      let t = -1; for (let y = Math.floor(y0); y <= y1; y++) { const v = g.L[y * tw + x]; if (v >= NEED_D && v <= NEED_L) { t = y; break; } }
+      if (t >= 0 && Math.abs(x - cx) > 3 * k) for (let y = t; y < t + (1.5 + (hash(x, i) % 3) * 0.6) * k; y++) g.put(x, y, SNOW);
+    }
+    for (let x = cx - hb * 0.85; x <= cx + hb * 0.85; x += 3 * k) {                             // a string of lights draped across
+      const u = (x - (cx - hb)) / (hb * 2), y = y0 + (y1 - y0) * (0.5 + 0.32 * u) + Math.sin(u * 9) * 1.5 * k;
+      if (Math.abs(x - cx) < 2 * k + (y - y0) / (y1 - y0) * (hb - 2 * k) - 2) g.put(x, y, LIGHT);
+    }
+    for (let j = 0; j < 2 + i; j++) {                                                         // baubles
+      const u = (j + 0.5) / (2 + i) * 2 - 1, y = y0 + (y1 - y0) * (0.72 + 0.12 * ((j + i) % 2)), x = cx + u * hb * 0.62;
+      g.oval(x, y, 1.9 * k, [BR, BG, BB, BP][(i * 3 + j) % 4], 1.9 * k);
+    }
+    if (i > 0) for (const s of [-1, 1]) {                                                     // the tips of each tier are perches
+      const a = cx + s * hb * 0.5, b = cx + s * (hb - 3 * k);
+      brs.push({ x0: Math.min(a, b), x1: Math.max(a, b), y: Math.round(y1 - 4 * k) });
+    }
+  }
+  const sy = 9 * k;                                                                           // the star
+  for (let j = -7 * k; j <= 7 * k; j++) { const w2 = Math.max(0, 2.2 * k - Math.abs(j) * 0.28); g.box(cx - w2, sy + j, w2 * 2 + 1, 1, STAR); g.box(cx + j, sy - w2 * 0.8, 1, w2 * 1.6 + 1, STAR); }
+  g.oval(cx, sy, 3.2 * k, STAR); g.oval(cx - 0.8 * k, sy - 0.8 * k, 1.3 * k, STAR_L);
+  brs.push({ x0: cx - tw * 0.09, x1: cx + tw * 0.09, y: Math.round(top + tierH * 0.55), top: true });
+  const C = { [TRUNK]: '#7d4f2e', [NEED_D]: '#1f6139', [NEED]: '#2d8048', [NEED_L]: '#45a25c', [SNOW]: '#f4f8ff', [BR]: '#e8433f', [BG]: '#f2c230', [BB]: '#4aa8f0', [BP]: '#c86ae0', [STAR]: '#ffcf33', [STAR_L]: '#fff6b8' };
+  for (const kk in C) C[kk] = hex(C[kk]);
+  return { g, tw, brs, flat: [SNOW, LIGHT, NEED_L, STAR_L], colour: (kk, x, y) => { if (!kk) return null; if (kk === LIGHT) return LIGHTS[hash(x, y) % LIGHTS.length];
+    let c = C[kk]; if (kk === NEED || kk === NEED_D || kk === NEED_L) { const h = hash(x >> 1, y); if (h % 9 === 0) c = mix(c, [10, 40, 20], 0.3); else if (h % 23 === 0) c = mix(c, WHITE, 0.6); }
+    if ((kk >= BR && kk <= BP) && hash(x, y) % 4 === 0) c = mix(c, WHITE, 0.35);
+    if (kk === TRUNK && hash(x, y >> 2) % 5 === 0) c = mix(c, [40, 22, 12], 0.25); return c; } };
+}
+
+// the gingerbread house from the app, grown big: climb the snowy roof and the chimney
+function cookieHouseArt(u) {
+  const w = Math.round(68 * u), h = Math.round(66 * u), g0 = grid(w, h), R = v => Math.round(v * u);
+  const g = { put: (x, y, k) => g0.box(R(x), R(y), Math.max(1, R(x + 1) - R(x)), Math.max(1, R(y + 1) - R(y)), k), box: (x, y, bw, bh, k) => g0.box(R(x), R(y), Math.max(1, R(x + bw) - R(x)), Math.max(1, R(y + bh) - R(y)), k), oval: (cx, cy, rx, k, ry = rx) => g0.oval(cx * u, cy * u, rx * u, k, ry * u) };
+  const CHIM = 1, ROOF = 2, EAVE = 3, WALL = 4, ICING = 5, CANE = 6, DOOR = 7, WIN = 8, GUM = 9, SNOW = 10;
+  g.box(46, 4, 9, 22, CHIM); g.box(44, 2, 13, 4, SNOW);
+  for (let y = 6; y <= 31; y++) { const half = 2 + (y - 6) * 1.24; g.box(34 - half, y, half * 2, 1, ROOF); }
+  for (let x = 0; x < 68; x++) { const half = 2 + 25 * 1.24, dx = Math.abs(x + 0.5 - 34); if (dx > half) continue;
+    const top = 6 + Math.max(0, (dx - 2) / 1.24), depth = 4 + hash(x, 7) % 3 + (x % 9 === 4 ? 3 : 0); g.box(x, top, 1, Math.min(depth, 29 - top), SNOW); }
+  g.box(2, 31, 64, 2, EAVE);
+  g.box(6, 33, 56, 33, WALL); g.box(6, 33, 56, 2, ICING);
+  for (let x = 6; x < 62; x += 4) g.box(x, 35, 2, 2, ICING);
+  g.box(27, 43, 14, 23, CANE); g.box(29, 45, 10, 21, DOOR); g.oval(37, 56, 1, GUM);
+  for (const x0 of [11, 47]) { g.box(x0, 41, 11, 11, ICING); g.box(x0 + 2, 43, 7, 7, WIN); g.box(x0 + 5, 43, 1, 7, ICING); g.box(x0 + 2, 46, 7, 1, ICING); }
+  for (const [x, i] of [[9, 0], [15, 1], [21, 2], [45, 3], [51, 0], [57, 1]]) g.oval(x, 61, 2.2, GUM + 0, 2);
+  const C = { [CHIM]: '#b2734a', [ROOF]: '#9c5f35', [EAVE]: '#ffffff', [WALL]: '#c98a4b', [ICING]: '#fffaf2', [CANE]: '#e0464b', [DOOR]: '#5a3422', [WIN]: '#ffd36b', [SNOW]: '#f8fbff' };
+  for (const kk in C) C[kk] = hex(C[kk]);
+  const GUMS = ['#5cc46a', '#b07de0', '#ff7fae', '#ffb347'].map(hex);
+  return { g: g0, flat: [ICING, WIN], brs: [{ x0: 28, x1: 40, y: 6 }, { x0: 45, x1: 55, y: 2 }, { x0: 3, x1: 12, y: 30 }, { x0: 56, x1: 65, y: 30 }].map(b => ({ x0: R(b.x0), x1: R(b.x1), y: R(b.y) })),
+    colour: (k, x, y) => { if (!k) return null; const X = Math.floor(x / u), Y = Math.floor(y / u); let c = C[k];
+      if (k === GUM) return GUMS[Math.floor(X / 6) % GUMS.length];
+      if (k === CANE && (X + Y) % 6 < 3) c = hex('#fff4f0');                                    // candy-cane stripes round the door
+      if (k === CHIM && (Y % 4 === 0 || (X + (Y >> 2) * 2) % 5 === 0)) c = mix(c, [60, 30, 15], 0.25);   // bricks
+      if (k === ROOF && (X + Y * 2) % 7 === 0) c = mix(c, [50, 25, 10], 0.2);
+      if (k === WALL && hash(X, Y) % 17 === 0) c = mix(c, [90, 50, 20], 0.3);                    // cookie speckles
+      if (k === WIN && hash(X, Y) % 5 === 0) c = hex('#ffe7a0');
+      return c; } };
+}
+function snowmanArt() {
+  const g = grid(26, 40), BODY = 1, SHADE = 2, COAL = 3, NOSE = 4, SCARF = 5, HAT = 6, BAND = 7, ARM = 8;
+  g.oval(13, 31, 9, BODY, 8); g.oval(15, 33, 6, SHADE, 5); g.oval(13, 31, 6, BODY, 5.5);
+  g.oval(13, 19, 6.5, BODY, 6); g.oval(13, 10, 5, BODY, 4.7);
+  g.box(7, 14, 12, 3, SCARF); g.box(15, 16, 3, 7, SCARF);
+  g.box(8, 4, 10, 2, HAT); g.box(10, 0, 6, 4, HAT); g.box(10, 3, 6, 1, BAND);
+  g.put(11, 9, COAL); g.put(15, 9, COAL); g.box(13, 11, 4, 1, NOSE); g.put(17, 11, NOSE);
+  for (const y of [19, 22, 26]) g.put(13, y, COAL);
+  for (let i = 0; i < 6; i++) { g.put(6 - i, 18 - i * 0.6, ARM); g.put(20 + i, 18 - i * 0.6, ARM); } g.put(1, 13, ARM); g.put(25, 13, ARM);
+  const C = { [BODY]: '#f6f9ff', [SHADE]: '#dfe7f5', [COAL]: '#2a2a33', [NOSE]: '#ff8a2a', [SCARF]: '#e0464b', [HAT]: '#2a2a33', [BAND]: '#3da35a', [ARM]: '#7d4f2e' };
+  for (const k in C) C[k] = hex(C[k]);
+  return { g, flat: [SHADE], brs: [{ x0: 9, x1: 17, y: 0 }], colour: (k, x, y) => !k ? null : (k === SCARF && x % 3 === 0) ? hex('#fff4f0') : C[k] };
+}
+function giftsArt() {
+  const g = grid(44, 18), cols = ['#e0464b', '#3da35a', '#4aa8f0', '#c86ae0'], C = {};
+  const boxes = [[0, 6, 14, 12], [13, 2, 12, 16], [24, 8, 11, 10], [33, 5, 11, 13]];
+  boxes.forEach(([x, y, bw, bh], i) => { g.box(x, y, bw, bh, 1 + i * 2); g.box(x + Math.floor(bw / 2) - 1, y, 2, bh, 2 + i * 2); g.box(x, y + Math.floor(bh / 2) - 1, bw, 2, 2 + i * 2); });
+  return { g, flat: [2, 4, 6, 8], brs: [{ x0: 14, x1: 24, y: 2 }, { x0: 34, x1: 43, y: 5 }],
+    colour: (k, x, y) => !k ? null : k % 2 ? hex(cols[(k - 1) / 2]) : hex(['#ffd84d', '#ffffff', '#ffd84d', '#ffffff'][(k - 2) / 2]) };
+}
+function caneArt() {
+  const g = grid(9, 22);
+  for (let y = 6; y < 22; y++) g.box(5, y, 3, 1, 1);
+  for (let a = 0; a <= Math.PI; a += 0.15) g.box(Math.round(4 + Math.cos(a) * 3), Math.round(5 - Math.sin(a) * 4), 3, 2, 1);
+  return { g, brs: [], colour: (k, x, y) => !k ? null : (x + y) % 5 < 2 ? hex('#e0464b') : hex('#fff8f4') };
+}
+// falling snow over the whole park
+const snow = { cv: null, flakes: [], last: 0 };
+function snowSize() {
+  if (!FEST) return;
+  if (!snow.cv) { snow.cv = document.createElement('canvas'); snow.cv.className = 'snow'; snow.cv.setAttribute('aria-hidden', 'true'); park.appendChild(snow.cv); requestAnimationFrame(snowTick); }
+  const aw = Math.ceil(W / S), ah = Math.ceil(H / S);
+  snow.cv.width = aw; snow.cv.height = ah; snow.cv.style.width = aw * S + 'px'; snow.cv.style.height = ah * S + 'px';
+  const n = Math.round(aw * ah / 260);
+  while (snow.flakes.length < n) snow.flakes.push({ x: Math.random() * aw, y: Math.random() * ah, v: rnd(5, 14), p: Math.random() * 6.3, big: Math.random() < 0.22 });
+  snow.flakes.length = n;
+}
+function snowTick(now) {
+  requestAnimationFrame(snowTick);
+  const dt = Math.min(0.1, (now - (snow.last || now)) / 1000); snow.last = now;
+  const cv = snow.cv, ctx = cv.getContext('2d'), aw = cv.width, ah = cv.height;
+  ctx.clearRect(0, 0, aw, ah);
+  for (const f of snow.flakes) {
+    f.y += f.v * dt * (f.big ? 1.3 : 1); f.p += dt * 1.3; const x = f.x + Math.sin(f.p) * 2.5;
+    if (f.y > ah) { f.y = -2; f.x = Math.random() * aw; }
+    ctx.fillStyle = f.big ? 'rgba(255,255,255,.95)' : 'rgba(255,255,255,.75)';
+    ctx.fillRect(Math.round(x), Math.round(f.y), f.big ? 2 : 1, f.big ? 2 : 1);
+  }
+}
+
 // ---------- the park: sky, hills, flower hedges, lawn with flower beds and a path ----------
 function drawBG() {
+  if (FEST) return drawWinterBG();
   const aw = Math.ceil(W / S), ah = Math.ceil(H / S);
   const g = grid(aw, ah), gy = Math.round(ah * 0.44);
   const SUN = 1, CLOUD = 2, HILL1 = 3, HILL2 = 4, HEDGE = 5, LAWN = 6, PATH = 7, BED = 8;
@@ -233,7 +412,8 @@ function treeArt(th, seed) {
 function logArt() {
   const g = grid(52, 16), LOG = 1, END = 2;
   g.box(4, 3, 44, 12, LOG); g.oval(4, 9, 4, LOG, 6); g.oval(48, 9, 4, END, 6);
-  return { g, colour: (k, x, y) => !k ? null : k === END ? (((x - 48) ** 2 + (y - 9) ** 2) % 7 < 2 ? hex('#b98a5a') : hex('#d9ab73')) : ((y + (x >> 3)) % 4 === 0 ? hex('#7a4f30') : hex('#946240')) };
+  if (FEST) { for (let x = 2; x < 50; x++) g.box(x, 2, 1, 2 + hash(x, 5) % 2, 3); g.oval(48, 3, 3, 3, 1.5); }
+  return { g, flat: [3], colour: (k, x, y) => !k ? null : k === 3 ? SNOWC : k === END ? (((x - 48) ** 2 + (y - 9) ** 2) % 7 < 2 ? hex('#b98a5a') : hex('#d9ab73')) : ((y + (x >> 3)) % 4 === 0 ? hex('#7a4f30') : hex('#946240')) };
 }
 function addLayer(art, ax, baseY, group) {            // ax: centre x, baseY: bottom row, both in art pixels
   const cv = document.createElement('canvas'); cv.className = 'prop'; park.appendChild(cv);
@@ -257,16 +437,24 @@ function playgroundArt(u) {
   for (let y = 2; y < 20; y++) { const half = (y - 2) * 1.35 + 2; g.box(27 - half, y, half * 2, 1, ROOF); }
   g.box(108, 26, 28, 3, PLANK); g.box(120, 29, 4, 11, POST);                     // a lookout perch on the right tower
   for (const [x, top] of [[58, 88], [72, 80], [86, 92]]) { g.box(x, top, 11, h - top, STUMP); g.oval(x + 5.5, top + 1, 5.5, STUMP, 2); }
+  const SNW = 9, LIT = 10;
+  if (FEST) {
+    for (const [x, y, bw] of [[4, 38, 44], [98, 38, 44], [4, 74, 44], [98, 70, 44], [108, 24, 28]]) for (let i = 0; i < bw; i++) g.box(x + i, y - (hash(i, y) % 2), 1, 2 + (hash(i, y) % 2), SNW);
+    for (const x of [58, 72, 86]) { const top = x === 58 ? 88 : x === 72 ? 80 : 92; g.box(x, top - 2, 11, 2, SNW); }
+    for (let y = 2; y < 9; y++) { const half = (y - 2) * 1.35 + 2; g.box(27 - half, y, half * 2, 1, SNW); }
+    for (let x = 50; x < 98; x += 5) g.box(x, 32 + Math.round(3 * Math.sin((x - 48) / 50 * Math.PI)), 2, 2, LIT);
+  }
   const C = { [POST]: '#8a5a36', [SISAL]: '#d8bf8c', [PLANK]: '#c58a52', [WALL]: '#f2dfb8', [HOLE]: '#4a3326', [ROOF]: '#e0705a', [ROPE]: '#e8d7a8', [STUMP]: '#9a6a42' };
   for (const k in C) C[k] = hex(C[k]);
-  return { g: g0, brs: [{ x0: 6, x1: 140, y: 40 }, { x0: 6, x1: 46, y: 76 }, { x0: 100, x1: 140, y: 72 }, { x0: 22, x1: 32, y: 4 }, { x0: 110, x1: 134, y: 26 },
+  return { g: g0, flat: [SNW, LIT], brs: [{ x0: 6, x1: 140, y: 40 }, { x0: 6, x1: 46, y: 76 }, { x0: 100, x1: 140, y: 72 }, { x0: 22, x1: 32, y: 4 }, { x0: 110, x1: 134, y: 26 },
                     { x0: 59, x1: 68, y: 88 }, { x0: 73, x1: 82, y: 80 }, { x0: 87, x1: 96, y: 92 }].map(b => ({ x0: R(b.x0), x1: R(b.x1), y: R(b.y) })),
-    colour: (k, x, y) => { if (!k) return null; let c = C[k]; x = Math.floor(x / u); y = Math.floor(y / u);
+    colour: (k, x, y) => { if (!k) return null; if (k === SNW) return SNOWC; if (k === LIT) return LIGHTS[hash(Math.floor(x / u / 5), 3) % LIGHTS.length]; let c = C[k]; x = Math.floor(x / u); y = Math.floor(y / u);
       if ((k === PLANK || k === POST || k === STUMP) && (x * 3 + (y >> 1)) % 7 === 0) c = mix(c, [0, 0, 0], 0.1);
       if (k === ROOF && y % 4 === 0) c = mix(c, [0, 0, 0], 0.14);
       if (k === WALL && (x - 12) % 6 === 0) c = mix(c, [0, 0, 0], 0.07); return c; } };
 }
 function buildProps(aw, ah) {
+  if (FEST) return buildWinterProps(aw, ah);
   for (const p of props) p.remove(); props.length = 0; plats.length = 0;
   const th = Math.round(Math.min(ah * 0.6, 150));
   addLayer(treeArt(th, 0), aw * 0.12, Math.round(ah * 0.8), 0);
@@ -274,7 +462,17 @@ function buildProps(aw, ah) {
   addLayer(playgroundArt(Math.max(1, Math.min(ah / 200, aw / 240, 1.45))), aw * 0.52, Math.round(ah * 0.84), 2);
   const log = logArt(); log.brs = [{ x0: 6, x1: 46, y: 3 }]; addLayer(log, aw * 0.3, Math.round(ah * 0.95), 3);
 }
-function size() { W = park.clientWidth; H = park.clientHeight; S = W > 1000 ? 3 : W < 520 ? 1.5 : 2; CS = S * 0.72; drawBG(); }
+function buildWinterProps(aw, ah) {
+  for (const p of props) p.remove(); props.length = 0; plats.length = 0;
+  addLayer(xmasTreeArt(Math.round(Math.min(ah * 0.8, 190))), aw * 0.13, Math.round(ah * 0.82), 0);
+  addLayer(giftsArt(), aw * 0.13 + 30, Math.round(ah * 0.86), 4);
+  addLayer(cookieHouseArt(Math.max(1, Math.min(ah / 150, 1.35))), aw * 0.87, Math.round(ah * 0.88), 1);
+  addLayer(playgroundArt(Math.max(1, Math.min(ah / 200, aw / 240, 1.45))), aw * 0.52, Math.round(ah * 0.84), 2);
+  const log = logArt(); log.brs = [{ x0: 6, x1: 46, y: 3 }]; addLayer(log, aw * 0.3, Math.round(ah * 0.95), 3);
+  addLayer(snowmanArt(), aw * 0.71, Math.round(ah * 0.73), 5);
+  for (const [fx, fy] of [[0.43, 0.7], [0.6, 0.74], [0.38, 0.99]]) addLayer(caneArt(), aw * fx, Math.round(ah * fy), 6);
+}
+function size() { W = park.clientWidth; H = park.clientHeight; S = W > 1000 ? 3 : W < 520 ? 1.5 : 2; CS = S * 0.72; drawBG(); snowSize(); }
 
 // ---------- cats ----------
 function makeCat(name, coat, me) {
